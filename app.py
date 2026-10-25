@@ -1,21 +1,79 @@
 """
 app.py — Student Performance Prediction
-Flask backend with model inference + metrics API
+Flask backend: model inference + metrics API.
+
+Endpoints
+  GET  /         dashboard page
+  POST /predict  JSON in -> predicted math score out (validated)
+  GET  /metrics  model results read from model/metrics.json
+  GET  /health   liveness check
 """
 
-from flask import Flask, request, jsonify, render_template
-import pandas as pd
-import numpy as np
-import joblib
+import json
+import math
 import os
+
+import joblib
+import pandas as pd
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
-# ── Load model ────────────────────────────────────────────────────────────────
-MODEL_PATH = os.getenv("MODEL_PATH", "model/student_model.pkl")
+# ── Load model + metrics ──────────────────────────────────────────────────────
+MODEL_PATH   = os.getenv("MODEL_PATH",   "model/student_model.pkl")
+METRICS_PATH = os.getenv("METRICS_PATH", "model/metrics.json")
+
 model = joblib.load(MODEL_PATH)
 
-# ── Grade helper ──────────────────────────────────────────────────────────────
+
+def load_metrics(path):
+    """Read metrics.json written by the training notebook. None if unavailable."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+METRICS = load_metrics(METRICS_PATH)
+
+# ── Input rules (must match the values used when the model was trained) ───────
+CATEGORIES = {
+    "gender"            : {"female", "male"},
+    "race_ethnicity"    : {f"group {c}" for c in "ABCDE"},
+    "parental_education": {"some high school", "high school", "some college",
+                           "associate's degree", "bachelor's degree", "master's degree"},
+    "lunch"             : {"standard", "free/reduced"},
+    "test_prep"         : {"none", "completed"},
+}
+SCORE_FIELDS = ("reading_score", "writing_score")
+
+
+def validate_payload(data):
+    """Return a clean dict, or raise ValueError with a message the user can act on."""
+    if not isinstance(data, dict):
+        raise ValueError("Request body must be a JSON object.")
+
+    clean = {}
+    for field, allowed in CATEGORIES.items():
+        value = data.get(field)
+        if not (isinstance(value, str) and value in allowed):
+            raise ValueError(f"'{field}' must be one of: {', '.join(sorted(allowed))}.")
+        clean[field] = value
+
+    for field in SCORE_FIELDS:
+        try:
+            value = float(data.get(field))
+        except (TypeError, ValueError):
+            raise ValueError(f"'{field}' must be a number between 0 and 100.")
+        if not math.isfinite(value) or not 0 <= value <= 100:
+            raise ValueError(f"'{field}' must be a number between 0 and 100.")
+        clean[field] = value
+
+    return clean
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def get_grade(score):
     if score >= 90: return "A+", "Outstanding"
     if score >= 80: return "A",  "Excellent"
@@ -24,12 +82,31 @@ def get_grade(score):
     if score >= 50: return "D",  "Below Average"
     return "F", "Needs Improvement"
 
-def get_confidence(score, reading, writing):
-    """Simple confidence proxy based on score consistency"""
-    avg_rw   = (reading + writing) / 2
-    diff     = abs(score - avg_rw)
-    conf     = max(60, min(98, 98 - diff * 0.8))
-    return round(conf, 1)
+
+def get_consistency(score, reading, writing):
+    """
+    Heuristic 60-98 score: how close the predicted math score is to the student's
+    reading/writing average. NOT a statistical confidence interval.
+    """
+    avg_rw = (reading + writing) / 2
+    value  = 98 - abs(score - avg_rw) * 0.8
+    return round(max(60, min(98, value)), 1)
+
+
+def build_features(clean):
+    """One-row DataFrame whose column names match the training data exactly."""
+    reading, writing = clean["reading_score"], clean["writing_score"]
+    return pd.DataFrame([{
+        "gender"                      : clean["gender"],
+        "race/ethnicity"              : clean["race_ethnicity"],
+        "parental level of education" : clean["parental_education"],
+        "lunch"                       : clean["lunch"],
+        "test preparation course"     : clean["test_prep"],
+        "reading score"               : reading,
+        "writing score"               : writing,
+        "avg_rw_score"                : (reading + writing) / 2,
+    }])
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -40,79 +117,44 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        d = request.get_json()
+        clean = validate_payload(request.get_json(silent=True))
+    except ValueError as err:
+        return jsonify({"success": False, "error": str(err)}), 400
 
-        reading_score  = float(d["reading_score"])
-        writing_score  = float(d["writing_score"])
-        avg_rw_score   = (reading_score + writing_score) / 2
-
-        input_df = pd.DataFrame([{
-            "gender"                      : d["gender"],
-            "race/ethnicity"              : d["race_ethnicity"],
-            "parental level of education" : d["parental_education"],
-            "lunch"                       : d["lunch"],
-            "test preparation course"     : d["test_prep"],
-            "reading score"               : reading_score,
-            "writing score"               : writing_score,
-            "avg_rw_score"                : avg_rw_score,
-        }])
-
-        raw_pred   = float(model.predict(input_df)[0])
-        pred_score = round(min(100, max(0, raw_pred)), 2)
+    try:
+        raw_pred     = float(model.predict(build_features(clean))[0])
+        pred_score   = round(min(100, max(0, raw_pred)), 2)
         grade, label = get_grade(pred_score)
-        confidence   = get_confidence(pred_score, reading_score, writing_score)
-
-        # Score breakdown for chart
-        breakdown = {
-            "math"    : pred_score,
-            "reading" : reading_score,
-            "writing" : writing_score,
-            "average" : round((pred_score + reading_score + writing_score) / 3, 2),
-        }
+        reading, writing = clean["reading_score"], clean["writing_score"]
 
         return jsonify({
-            "success"    : True,
-            "score"      : pred_score,
-            "grade"      : grade,
-            "label"      : label,
-            "confidence" : confidence,
-            "breakdown"  : breakdown,
+            "success"     : True,
+            "score"       : pred_score,
+            "grade"       : grade,
+            "label"       : label,
+            "consistency" : get_consistency(pred_score, reading, writing),
+            "breakdown"   : {
+                "math"    : pred_score,
+                "reading" : reading,
+                "writing" : writing,
+                "average" : round((pred_score + reading + writing) / 3, 2),
+            },
         })
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception:
+        app.logger.exception("Prediction failed")
+        return jsonify({"success": False, "error": "Prediction failed on the server."}), 500
 
 
 @app.route("/metrics")
 def metrics():
-    """Model performance metrics — shown in dashboard cards"""
-    return jsonify({
-        "r2"          : 0.8823,
-        "mae"         : 4.12,
-        "rmse"        : 5.38,
-        "accuracy"    : 88.23,
-        "train_size"  : 800,
-        "test_size"   : 200,
-        "total_rows"  : 1000,
-        "n_features"  : 8,
-        "best_model"  : "Random Forest",
-        "cv_score"    : 0.876,
-        "feature_importance": {
-            "avg_rw_score"              : 0.412,
-            "writing score"             : 0.198,
-            "reading score"             : 0.187,
-            "lunch_standard"            : 0.072,
-            "test_prep_completed"       : 0.061,
-            "parental_bachelors"        : 0.034,
-            "gender_female"             : 0.021,
-            "race_group_E"              : 0.015,
-        }
-    })
+    if METRICS is None:
+        return jsonify({"error": f"{METRICS_PATH} not found or invalid."}), 503
+    return jsonify(METRICS)
 
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "model": MODEL_PATH})
+    return jsonify({"status": "ok", "model": MODEL_PATH, "metrics_loaded": METRICS is not None})
 
 
 if __name__ == "__main__":

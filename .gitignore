@@ -1,6 +1,18 @@
 # Virtual environment
-venv
+venv/
+.venv/
+env/
 
+# Python cache / test cache
+__pycache__/
+*.pyc
+.pytest_cache/
 
+# Raw data (not needed to run the app)
+*.csv
 
-
+# Secrets and editor files
+.env
+.vscode/
+.idea/
+.DS_Store

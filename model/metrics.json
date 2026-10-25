@@ -1,0 +1,64 @@
+{
+  "deployed_model": "Random Forest (tuned)",
+  "r2": 0.8471,
+  "mae": 4.64,
+  "rmse": 6.1,
+  "cv_r2": 0.8391,
+  "train_size": 800,
+  "test_size": 200,
+  "total_rows": 1000,
+  "n_features": 8,
+  "sklearn_version": "1.6.1",
+  "model_comparison": [
+    {
+      "model": "Linear Regression",
+      "r2": 0.8804
+    },
+    {
+      "model": "Ridge Regression",
+      "r2": 0.8806
+    },
+    {
+      "model": "Lasso Regression",
+      "r2": 0.8809
+    },
+    {
+      "model": "K-Nearest Neighbors",
+      "r2": 0.7997
+    },
+    {
+      "model": "Decision Tree",
+      "r2": 0.8445
+    },
+    {
+      "model": "Random Forest",
+      "r2": 0.8449
+    },
+    {
+      "model": "Gradient Boosting",
+      "r2": 0.8669
+    },
+    {
+      "model": "XGBoost",
+      "r2": 0.8327
+    },
+    {
+      "model": "CatBoost",
+      "r2": 0.8476
+    },
+    {
+      "model": "Random Forest (tuned)",
+      "r2": 0.8471
+    }
+  ],
+  "feature_importance": {
+    "avg_rw_score": 0.406,
+    "reading score": 0.305,
+    "writing score": 0.113,
+    "gender_female": 0.067,
+    "gender_male": 0.065,
+    "lunch_free/reduced": 0.007,
+    "race/ethnicity_group E": 0.007,
+    "lunch_standard": 0.006
+  }
+}
