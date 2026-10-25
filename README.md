@@ -21,16 +21,18 @@ and deployment on Render.
 Dataset: [Students Performance in Exams](https://www.kaggle.com/datasets/spscientist/students-performance-in-exams)
 (1,000 rows, no missing values). 80/20 train/test split (`random_state=42`), 5-fold cross-validation on the training set.
 
-| Model | Test R² | MAE (marks) | RMSE |
-|---|---|---|---|
-| Lasso | 0.881 | 4.21 | 5.39 |
-| Ridge | 0.881 | 4.21 | 5.39 |
-| Linear Regression | 0.880 | 4.22 | 5.39 |
-| Gradient Boosting | 0.867 | 4.39 | 5.69 |
-| **Random Forest (tuned, deployed)** | **0.847** | **4.64** | **6.10** |
-| Random Forest (default) | 0.845 | 4.76 | 6.14 |
-| Decision Tree | 0.845 | 4.76 | 6.15 |
-| KNN | 0.801 | 5.40 | 6.95 |
+| Model | Test R² | MAE (marks) | RMSE | 5-fold CV R² |
+|---|---|---|---|---|
+| Lasso | 0.881 | 4.21 | 5.38 | 0.869 |
+| Ridge | 0.881 | 4.21 | 5.39 | 0.869 |
+| Linear Regression | 0.880 | 4.21 | 5.39 | 0.869 |
+| Gradient Boosting | 0.867 | 4.39 | 5.69 | 0.850 |
+| CatBoost | 0.848 | 4.65 | 6.09 | 0.842 |
+| **Random Forest (tuned, deployed)** | **0.847** | **4.64** | **6.10** | **0.839** |
+| Random Forest (default) | 0.845 | 4.75 | 6.14 | 0.833 |
+| Decision Tree | 0.845 | 4.76 | 6.15 | 0.777 |
+| XGBoost | 0.833 | 4.92 | 6.38 | 0.797 |
+| KNN | 0.800 | 5.43 | 6.98 | 0.789 |
 
 **Takeaway:** regularised linear models slightly outperformed the tuned Random Forest. Math score is
 close to a linear function of reading and writing scores, and with 1,000 rows tree ensembles add
