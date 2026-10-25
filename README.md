@@ -10,11 +10,11 @@ and deployment on Render.
 **Live demo:** https://student-performance-prediction-9igt.onrender.com/
 *(Free tier: the first request after a quiet period can take up to a minute while the service wakes up.)*
 
--->
+
 ![Dashboard](demo/dashboard.png)
 ![Prediction](demo/predict.png)
 ![Charts](demo/charts.png)
--->
+
 
 ## Results
 
